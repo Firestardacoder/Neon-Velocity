@@ -1,96 +1,129 @@
 <!DOCTYPE html>
     <html>
     <head>
-        <title>Neon Velocity - Poly Style</title>
-        <style> body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; } 
-        #ui { position: absolute; top: 20px; left: 20px; color: #00ffff; font-size: 20px; text-shadow: 0 0 10px #00ffff; pointer-events: none; }
+        <title>Neon Velocity - Pro Track</title>
+        <style> 
+            body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; } 
+            #ui { position: absolute; top: 20px; left: 20px; color: #00ffff; font-size: 24px; text-shadow: 0 0 15px #00ffff; pointer-events: none; }
+            #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff00ff; font-size: 40px; text-shadow: 0 0 20px #ff00ff; display: none; }
         </style>
     </head>
     <body>
-        <div id="ui">Distance: <span id="dist">0</span>m</div>
+        <div id="ui">LAP TIME: <span id="timer">0.0</span>s<br>CHECKPOINTS: <span id="cp">0</span>/8</div>
+        <div id="msg">TRACK COMPLETE!</div>
         <script type="importmap">
             { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
         </script>
         <script type="module">
             import * as THREE from 'three';
     
-            // 1. SETUP SCENE
             const scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x000000, 0.02); // Add fog for depth
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            scene.background = new THREE.Color(0x000030); // Dark blue background
+            scene.fog = new THREE.FogExp2(0x000030, 0.015); // Matching fog
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
             const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ReinhardToneMapping;
             document.body.appendChild(renderer.domElement);
     
-            // 2. LIGHTING
-            const ambientLight = new THREE.AmbientLight(0x404040, 2); 
-            scene.add(ambientLight);
-            const sun = new THREE.DirectionalLight(0x00ffff, 1);
-            sun.position.set(5, 10, 5);
-            scene.add(sun);
+            // LIGHTING
+            const ambient = new THREE.AmbientLight(0x404040, 3);
+            scene.add(ambient);
+            const blueLight = new THREE.PointLight(0x00ffff, 10, 100);
+            scene.add(blueLight);
     
-            // 3. THE CAR
-            const carGroup = new THREE.Group();
-            const bodyGeom = new THREE.BoxGeometry(1, 0.5, 2);
-            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xff00ff, emissive: 0x440044 });
-            const body = new THREE.Mesh(bodyGeom, bodyMat);
-            carGroup.add(body);
-            
-            // Add neon 'headlights'
-            const lightGeom = new THREE.BoxGeometry(0.8, 0.1, 0.1);
-            const lightMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-            const headlight = new THREE.Mesh(lightGeom, lightMat);
-            headlight.position.set(0, 0.1, 1);
-            carGroup.add(headlight);
+            // THE CAR
+            const car = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 2.2), new THREE.MeshPhongMaterial({ color: 0x000000, emissive: 0xff00ff, emissiveIntensity: 2 }));
+            car.add(body);
+            const glow = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 2.4), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+            glow.position.y = -0.2;
+            car.add(glow);
+            scene.add(car);
     
-            carGroup.position.y = 0.25;
-            scene.add(carGroup);
+            // THE TRACK
+            const trackGroup = new THREE.Group();
+            const trackMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 100 });
+            const neonEdgeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
     
-            // 4. THE TRACK (Expanded for a 'longer' level)
-            const grid = new THREE.GridHelper(2000, 100, 0x00ffff, 0x222222);
-            scene.add(grid);
+            const points = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, 100),
+                new THREE.Vector3(50, 0, 150),
+                new THREE.Vector3(150, 0, 150),
+                new THREE.Vector3(200, 0, 100),
+                new THREE.Vector3(200, 0, -50),
+                new THREE.Vector3(100, 0, -100),
+                new THREE.Vector3(0, 0, -50),
+                new THREE.Vector3(0, 0, 0)
+            ];
     
-            // 5. DRIVING LOGIC
-            let speed = 0;
-            let distance = 0;
+            const checkpoints = [];
+            for (let i = 0; i < points.length - 1; i++) {
+                const start = points[i];
+                const end = points[i+1];
+                const dist = start.distanceTo(end);
+                const segment = new THREE.Mesh(new THREE.BoxGeometry(15, 0.1, dist), trackMat);
+                segment.position.copy(start).lerp(end, 0.5);
+                segment.lookAt(end);
+                trackGroup.add(segment);
+    
+                // Neon Edges
+                const edgeL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, dist), neonEdgeMat);
+                edgeL.position.set(-7.5, 0.2, 0);
+                segment.add(edgeL);
+                const edgeR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, dist), neonEdgeMat);
+                edgeR.position.set(7.5, 0.2, 0);
+                segment.add(edgeR);
+    
+                // Gate/Checkpoint
+                const gate = new THREE.Mesh(new THREE.TorusGeometry(8, 0.2, 16, 4), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
+                gate.position.copy(end);
+                gate.lookAt(start);
+                checkpoints.push(gate);
+                scene.add(gate);
+            }
+            scene.add(trackGroup);
+    
+            // LOGIC
+            let speed = 0, steer = 0, clock = 0, collected = 0;
             const keys = {};
             window.onkeydown = (e) => keys[e.key] = true;
             window.onkeyup = (e) => keys[e.key] = false;
     
-            // BUG FIX: Handle window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-    
             function update() {
-                // Acceleration & Braking
-                if (keys['ArrowUp'] || keys['w']) speed += 0.005;
-                if (keys['ArrowDown'] || keys['s']) speed -= 0.005;
-                speed *= 0.97; // Smoother friction
+                if (keys['w']) speed += 0.01;
+                if (keys['s']) speed -= 0.01;
+                speed *= 0.98;
     
-                // Steering (only when moving)
-                const steeringTurn = 0.04 * (Math.abs(speed) * 2);
-                if (keys['ArrowLeft'] || keys['a']) carGroup.rotation.y += steeringTurn;
-                if (keys['ArrowRight'] || keys['d']) carGroup.rotation.y -= steeringTurn;
+                if (keys['a']) car.rotation.y += 0.04 * (Math.min(Math.abs(speed), 1));
+                if (keys['d']) car.rotation.y -= 0.04 * (Math.min(Math.abs(speed), 1));
     
-                // Movement
-                carGroup.position.x += Math.sin(carGroup.rotation.y) * speed;
-                carGroup.position.z += Math.cos(carGroup.rotation.y) * speed;
-                
-                distance += Math.abs(speed);
-                document.getElementById('dist').innerText = Math.floor(distance * 10);
+                car.position.x += Math.sin(car.rotation.y) * speed;
+                car.position.z += Math.cos(car.rotation.y) * speed;
+                blueLight.position.copy(car.position).y += 2;
     
-                // Camera follow (Smoother)
-                const goalPos = new THREE.Vector3(
-                    carGroup.position.x - Math.sin(carGroup.rotation.y) * 6,
-                    carGroup.position.y + 2.5,
-                    carGroup.position.z - Math.cos(carGroup.rotation.y) * 6
+                // Camera
+                const camTarget = new THREE.Vector3(
+                    car.position.x - Math.sin(car.rotation.y) * 8,
+                    car.position.y + 4,
+                    car.position.z - Math.cos(car.rotation.y) * 8
                 );
-                camera.position.lerp(goalPos, 0.1);
-                camera.lookAt(carGroup.position);
+                camera.position.lerp(camTarget, 0.1);
+                camera.lookAt(car.position);
+    
+                // Checkpoints
+                checkpoints.forEach((gate, idx) => {
+                    if (gate.visible && car.position.distanceTo(gate.position) < 10) {
+                        gate.visible = false;
+                        collected++;
+                        document.getElementById('cp').innerText = collected;
+                        if (collected === checkpoints.length) document.getElementById('msg').style.display = 'block';
+                    }
+                });
+    
+                clock += 0.016;
+                document.getElementById('timer').innerText = clock.toFixed(1);
             }
     
             function animate() {
@@ -99,7 +132,12 @@
                 renderer.render(scene, camera);
             }
             animate();
+    
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         </script>
     </body>
     </html>
-    
