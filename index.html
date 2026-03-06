@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Neon Velocity - Poly Style</title>
+        <style> body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; } 
+        #ui { position: absolute; top: 20px; left: 20px; color: #00ffff; font-size: 20px; text-shadow: 0 0 10px #00ffff; pointer-events: none; }
+        </style>
+    </head>
+    <body>
+        <div id="ui">Distance: <span id="dist">0</span>m</div>
+        <script type="importmap">
+            { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+        </script>
+        <script type="module">
+            import * as THREE from 'three';
+    
+            // 1. SETUP SCENE
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.02); // Add fog for depth
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+    
+            // 2. LIGHTING
+            const ambientLight = new THREE.AmbientLight(0x404040, 2); 
+            scene.add(ambientLight);
+            const sun = new THREE.DirectionalLight(0x00ffff, 1);
+            sun.position.set(5, 10, 5);
+            scene.add(sun);
+    
+            // 3. THE CAR
+            const carGroup = new THREE.Group();
+            const bodyGeom = new THREE.BoxGeometry(1, 0.5, 2);
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xff00ff, emissive: 0x440044 });
+            const body = new THREE.Mesh(bodyGeom, bodyMat);
+            carGroup.add(body);
+            
+            // Add neon 'headlights'
+            const lightGeom = new THREE.BoxGeometry(0.8, 0.1, 0.1);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const headlight = new THREE.Mesh(lightGeom, lightMat);
+            headlight.position.set(0, 0.1, 1);
+            carGroup.add(headlight);
+    
+            carGroup.position.y = 0.25;
+            scene.add(carGroup);
+    
+            // 4. THE TRACK (Expanded for a 'longer' level)
+            const grid = new THREE.GridHelper(2000, 100, 0x00ffff, 0x222222);
+            scene.add(grid);
+    
+            // 5. DRIVING LOGIC
+            let speed = 0;
+            let distance = 0;
+            const keys = {};
+            window.onkeydown = (e) => keys[e.key] = true;
+            window.onkeyup = (e) => keys[e.key] = false;
+    
+            // BUG FIX: Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+    
+            function update() {
+                // Acceleration & Braking
+                if (keys['ArrowUp'] || keys['w']) speed += 0.005;
+                if (keys['ArrowDown'] || keys['s']) speed -= 0.005;
+                speed *= 0.97; // Smoother friction
+    
+                // Steering (only when moving)
+                const steeringTurn = 0.04 * (Math.abs(speed) * 2);
+                if (keys['ArrowLeft'] || keys['a']) carGroup.rotation.y += steeringTurn;
+                if (keys['ArrowRight'] || keys['d']) carGroup.rotation.y -= steeringTurn;
+    
+                // Movement
+                carGroup.position.x += Math.sin(carGroup.rotation.y) * speed;
+                carGroup.position.z += Math.cos(carGroup.rotation.y) * speed;
+                
+                distance += Math.abs(speed);
+                document.getElementById('dist').innerText = Math.floor(distance * 10);
+    
+                // Camera follow (Smoother)
+                const goalPos = new THREE.Vector3(
+                    carGroup.position.x - Math.sin(carGroup.rotation.y) * 6,
+                    carGroup.position.y + 2.5,
+                    carGroup.position.z - Math.cos(carGroup.rotation.y) * 6
+                );
+                camera.position.lerp(goalPos, 0.1);
+                camera.lookAt(carGroup.position);
+            }
+    
+            function animate() {
+                requestAnimationFrame(animate);
+                update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        </script>
+    </body>
+    </html>
+    
